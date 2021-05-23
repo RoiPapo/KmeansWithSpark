@@ -6,11 +6,7 @@ from pyspark.sql.functions import lit, monotonically_increasing_id, col, array, 
 from pyspark.sql import functions as F
 from pyspark.sql import SparkSession
 
-
-
 findspark.init()
-
-
 
 
 def kmeans_fit(data, k, max_iter, q, init):
@@ -18,11 +14,14 @@ def kmeans_fit(data, k, max_iter, q, init):
     centroids = np.array(init)
     for j in range(max_iter):
         prev_cent = centroids
-        centroids  = runer(data, k, max_iter, q, centroids,spark)
+        df_centroids = runer(data, k, max_iter, q, centroids, spark)
+        centroids = np.array(df_centroids.select('_1', '_2', '_3').collect())
+        centroids[[0, 1]] = centroids[[1, 0]]
+        print(centroids)
         print(np.linalg.norm(np.array(prev_cent) - np.array(centroids)))
         if np.linalg.norm(np.array(prev_cent) - np.array(centroids)) < 0.0005:
-            return centroids
-    return centroids
+            return df_centroids
+    return df_centroids
 
 
 def init_spark(app_name: str):
@@ -31,7 +30,7 @@ def init_spark(app_name: str):
     return spark, sc
 
 
-def runer(data, k, max_iter, q, init,spark):
+def runer(data, k, max_iter, q, init, spark):
     centroids = init
     tagged_data = data.withColumn("id", monotonically_increasing_id()).withColumn("cluster_id", lit(0)).withColumn(
         "dist_from_cent", lit(float('inf')))
@@ -59,10 +58,8 @@ FROM added_dense_rank
 WHERE rank %{}!=0 ;""".format(q))
     centroidsTemp = tagged_data.groupBy('Cluster_num').agg(avg("_1").alias("_1"), avg("_2").alias("_2"),
                                                            avg("_3").alias("_3"))
-    centroids = np.array(centroidsTemp.select('_1', '_2', '_3').collect())
-    centroids[[0, 1]] = centroids[[1, 0]]
-    print(centroids)
-    return centroids
+
+    return centroidsTemp
 
 
 def main():
